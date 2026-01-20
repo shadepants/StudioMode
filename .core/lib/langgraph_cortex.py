@@ -12,7 +12,7 @@ from typing import TypedDict, Annotated, Literal, Optional
 from enum import Enum
 
 # LangGraph imports
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages
 
 # LiteLLM for model abstraction
@@ -134,6 +134,7 @@ def fetch_task_node(state: HiveState) -> HiveState:
     
     # Claim the first pending task
     task = tasks[0]
+    print(f"[fetch] Claiming task: {task['id']}")
     client.claim_task(task["id"], agent_id="engineer_agent")
     client.update_state(AgentState.EXECUTING)
     
@@ -293,23 +294,28 @@ Evaluate this output against the task requirements."""
 def should_continue(state: HiveState) -> Literal["fetch", "engineer", "critic", "end"]:
     """Router function to determine next node."""
     phase = state.get("current_phase", AgentState.IDLE)
+    print(f"[router] Current Phase: {phase}")
     
     if phase == AgentState.IDLE:
         if state.get("task_id"):
+            print("[router] Decision: end")
             return "end"  # Just completed a task
+        print("[router] Decision: fetch")
         return "fetch"  # Look for new tasks
     elif phase == AgentState.EXECUTING:
+        print("[router] Decision: engineer")
         return "engineer"
     elif phase == AgentState.REVIEW:
+        print("[router] Decision: critic")
         return "critic"
     else:
+        print("[router] Decision: end")
         return "end"
 
 
 # --- GRAPH CONSTRUCTION ---
 def create_hive_graph() -> StateGraph:
     """Build the LangGraph state machine for the Hive Loop."""
-    
     graph = StateGraph(HiveState)
     
     # Add nodes
@@ -317,27 +323,21 @@ def create_hive_graph() -> StateGraph:
     graph.add_node("engineer", engineer_node)
     graph.add_node("critic", critic_node)
     
-    # Add conditional edges
-    graph.add_conditional_edges(
-        "__start__",
-        should_continue,
-        {
-            "fetch": "fetch",
-            "engineer": "engineer", 
-            "critic": "critic",
-            "end": END
-        }
-    )
+    # Set entry point
+    graph.set_entry_point("fetch")
     
+    # Add conditional edges from 'fetch'
     graph.add_conditional_edges(
         "fetch",
         should_continue,
         {
+            "fetch": "fetch",     # Loop back if no task
             "engineer": "engineer",
             "end": END
         }
     )
     
+    # Add conditional edges from 'engineer'
     graph.add_conditional_edges(
         "engineer",
         should_continue,
@@ -347,6 +347,7 @@ def create_hive_graph() -> StateGraph:
         }
     )
     
+    # Add conditional edges from 'critic'
     graph.add_conditional_edges(
         "critic",
         should_continue,

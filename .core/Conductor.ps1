@@ -1,43 +1,33 @@
-# .core/Conductor.ps1
-# The Studio Mode Bootloader
 
-Write-Host "[*] Initializing Studio Mode..." -ForegroundColor Cyan
+# Studio Mode Conductor
+# =====================
+# Orchestrates the Governed Hive: Memory Server, Engineer, Critic, and Scout services.
 
-# 1. Import Client Library
-$ModulePath = Join-Path $PSScriptRoot "lib\memory_client.psm1"
-if (-not (Test-Path $ModulePath)) {
-    Write-Error "CRITICAL: Memory Client module not found at $ModulePath"
-    exit 1
-}
-Import-Module $ModulePath -Force
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ProjectRoot = Resolve-Path "$PSScriptRoot\.."
 
-# 2. Check Memory Daemon
-Write-Host "[*] Connecting to Memory Daemon..." -NoNewline
-$Health = Get-MemoryHealth
-if ($null -eq $Health) {
-    Write-Host " [OFFLINE]" -ForegroundColor Red
-    Write-Host "[!] Attempting to start Memory Daemon..."
-    $DaemonPath = Join-Path $PSScriptRoot "services\memory_server.py"
-    Start-Process python -ArgumentList "$DaemonPath" -RedirectStandardOutput ".core\logs\memory_daemon.log" -RedirectStandardError ".core\logs\memory_daemon.err" -NoNewWindow
-    Start-Sleep -Seconds 5
-    $Health = Get-MemoryHealth
-}
+Write-Host "--- STANDING UP THE GOVERNED HIVE ---" -ForegroundColor Cyan
 
-if ($Health.status -eq "online") {
-    Write-Host " [ONLINE]" -ForegroundColor Green
-    Write-Host "    |__ State: $($Health.state)" -ForegroundColor Gray
-    Write-Host "    |__ DB:    $($Health.db)" -ForegroundColor Gray
-} else {
-    Write-Error "FATAL: Could not start Memory Daemon."
-    exit 1
-}
+# 1. Start Memory Server (The Spine)
+Write-Host "[1/4] Starting Memory Server (Port 8000)..." -ForegroundColor Yellow
+Start-Process python -ArgumentList ".core/services/memory_server.py" -NoNewWindow -PassThru
 
-# 3. Load Personas
-$ManagerPersona = Get-Content (Join-Path $PSScriptRoot "agents\manager.md") -Raw
-$WorkerPersona = Get-Content (Join-Path $PSScriptRoot "agents\worker.md") -Raw
+# 2. Start Engineer Service
+Write-Host "[2/4] Starting Engineer Service (Port 8001)..." -ForegroundColor Yellow
+Start-Process python -ArgumentList ".core/services/engineer_service.py" -NoNewWindow -PassThru
 
-# 4. Context Handover
-Write-Host "`n[*] Studio Mode Ready." -ForegroundColor Cyan
-Write-Host "You are now the CONDUCTOR." -ForegroundColor Yellow
-Write-Host "Use 'Get-MemoryHealth', 'Search-Memory', and 'Add-MemoryEntry' to manage the session."
-Write-Host "---------------------------------------------------------------"
+# 3. Start Critic Service
+Write-Host "[3/4] Starting Critic Service (Port 8002)..." -ForegroundColor Yellow
+Start-Process python -ArgumentList ".core/services/critic_service.py" -NoNewWindow -PassThru
+
+# 4. Start Scout Service
+Write-Host "[4/4] Starting Scout Service (Port 8003)..." -ForegroundColor Yellow
+Start-Process python -ArgumentList ".core/services/scout_service.py" -NoNewWindow -PassThru
+
+Write-Host "--- HIVE IS ONLINE ---" -ForegroundColor Green
+Write-Host "Memory Server: http://localhost:8000"
+Write-Host "Engineer:      http://localhost:8001"
+Write-Host "Critic:        http://localhost:8002"
+Write-Host "Scout:         http://localhost:8003"
+Write-Host ""
+Write-Host "To start the autonomous loop, run: .core/Conductor.ps1 -Loop"

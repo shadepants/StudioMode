@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy core files
+COPY .core/ .core/
+
+# Expose port
+EXPOSE 8000
+
+# Run memory server
+CMD ["python", ".core/services/memory_server.py"]

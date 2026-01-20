@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  memory-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.memory
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./.core/memory:/app/.core/memory
+      - ./.core/logs:/app/.core/logs
+    environment:
+      - LOG_LEVEL=INFO
+      - LOG_FILE=true
+      - LOG_CONSOLE=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  engineer-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.engineer
+    ports:
+      - "8001:8001"
+    depends_on:
+      memory-server:
+        condition: service_healthy
+    environment:
+      - MEMORY_SERVER_URL=http://memory-server:8000
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  critic-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.critic
+    ports:
+      - "8002:8002"
+    depends_on:
+      memory-server:
+        condition: service_healthy
+    environment:
+      - MEMORY_SERVER_URL=http://memory-server:8000
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  scout-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.scout
+    ports:
+      - "8003:8003"
+    depends_on:
+      memory-server:
+        condition: service_healthy
+    environment:
+      - MEMORY_SERVER_URL=http://memory-server:8000
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  engineer-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      - memory-server
+      - engineer-service
+    environment:
+      - MEMORY_SERVER_URL=http://memory-server:8000
+      - ENGINEER_SERVICE_URL=http://engineer-service:8001
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./studio-governor
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - memory-server
+    restart: unless-stopped
+
+networks:
+  default:
+    name: studio-mode-network
+
+volumes:
+  memory-data:
+  logs-data:

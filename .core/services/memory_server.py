@@ -668,6 +668,102 @@ def delegate_task(task_id: str, new_assignee: str, message: str = ""):
     return {"status": "success", "delegated_to": new_assignee}
 
 
+# --- METRICS ENDPOINT ---
+@app.get("/metrics")
+def get_metrics():
+    """Get system metrics for Mission Control dashboard."""
+    cur = ctx.sql_conn.cursor()
+    
+    # Task metrics
+    cur.execute("SELECT COUNT(*) as total FROM tasks")
+    total_tasks = cur.fetchone()["total"]
+    
+    cur.execute("SELECT COUNT(*) as completed FROM tasks WHERE status = 'completed'")
+    completed_tasks = cur.fetchone()["completed"]
+    
+    cur.execute("SELECT COUNT(*) as in_progress FROM tasks WHERE status = 'in_progress'")
+    in_progress = cur.fetchone()["in_progress"]
+    
+    cur.execute("SELECT COUNT(*) as pending FROM tasks WHERE status = 'pending'")
+    pending_tasks = cur.fetchone()["pending"]
+    
+    cur.execute("SELECT COUNT(*) as failed FROM tasks WHERE status = 'failed'")
+    failed_tasks = cur.fetchone()["failed"]
+    
+    # Agent metrics
+    active_agents = len([a for a in agents.values() if time.time() - a.get("last_heartbeat", 0) < 60])
+    total_agents = len(agents)
+    
+    # Calculate average task duration (using completed tasks with timestamps)
+    cur.execute("""
+        SELECT AVG(updated_at - created_at) as avg_duration 
+        FROM tasks 
+        WHERE status = 'completed' AND updated_at > created_at
+    """)
+    avg_row = cur.fetchone()
+    avg_duration = avg_row["avg_duration"] if avg_row and avg_row["avg_duration"] else 0
+    
+    # Recent activity count (last hour)
+    hour_ago = time.time() - 3600
+    cur.execute("SELECT COUNT(*) as recent FROM tasks WHERE updated_at > ?", (hour_ago,))
+    recent_activity = cur.fetchone()["recent"]
+    
+    # System uptime (time since first task or server start)
+    cur.execute("SELECT MIN(created_at) as first_task FROM tasks")
+    first_row = cur.fetchone()
+    uptime = time.time() - first_row["first_task"] if first_row and first_row["first_task"] else 0
+    
+    return {
+        "timestamp": time.time(),
+        "tasks": {
+            "total": total_tasks,
+            "completed": completed_tasks,
+            "in_progress": in_progress,
+            "pending": pending_tasks,
+            "failed": failed_tasks,
+        },
+        "agents": {
+            "total": total_agents,
+            "active": active_agents,
+        },
+        "performance": {
+            "avg_duration_seconds": round(avg_duration, 2),
+            "recent_activity": recent_activity,
+        },
+        "system": {
+            "uptime_seconds": round(uptime, 0),
+            "state": ctx.current_state.value,
+        }
+    }
+
+
+@app.get("/metrics/prometheus")
+def get_metrics_prometheus():
+    """Get metrics in Prometheus exposition format."""
+    metrics = get_metrics()
+    lines = [
+        "# HELP studio_tasks_total Total number of tasks",
+        "# TYPE studio_tasks_total counter",
+        f"studio_tasks_total {metrics['tasks']['total']}",
+        "",
+        "# HELP studio_tasks_completed Completed tasks",
+        f"studio_tasks_completed {metrics['tasks']['completed']}",
+        "",
+        "# HELP studio_tasks_failed Failed tasks",
+        f"studio_tasks_failed {metrics['tasks']['failed']}",
+        "",
+        "# HELP studio_agents_active Active agents",
+        f"studio_agents_active {metrics['agents']['active']}",
+        "",
+        "# HELP studio_task_duration_avg Average task duration",
+        f"studio_task_duration_avg {metrics['performance']['avg_duration_seconds']}",
+        "",
+        "# HELP studio_uptime_seconds System uptime",
+        f"studio_uptime_seconds {metrics['system']['uptime_seconds']}",
+    ]
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

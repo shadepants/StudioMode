@@ -461,6 +461,214 @@ def update_task(req: TaskUpdateRequest):
 def health_check():
     return {"status": "online", "state": ctx.current_state, "mode": "hybrid"}
 
+
+# =============================================================================
+# MULTI-AGENT COORDINATION PROTOCOL
+# =============================================================================
+# Enables collaborative workflows between Antigravity IDE and Gemini CLI
+
+class AgentRegistration(BaseModel):
+    agent_id: str
+    agent_type: str  # "antigravity", "gemini-cli", "custom"
+    capabilities: List[str] = []
+
+class WorkflowTask(BaseModel):
+    name: str
+    description: str
+    assignee: str
+    priority: str = "normal"
+    dependencies: List[str] = []  # task_ids this depends on
+
+class WorkflowCreateRequest(BaseModel):
+    workflow_id: str
+    name: str
+    tasks: List[WorkflowTask]
+
+# In-memory agent registry (could be persisted to SQLite)
+registered_agents: Dict[str, dict] = {}
+active_workflows: Dict[str, dict] = {}
+
+@app.post("/agents/register")
+def register_agent(req: AgentRegistration):
+    """Register an agent for collaborative work."""
+    registered_agents[req.agent_id] = {
+        "agent_id": req.agent_id,
+        "agent_type": req.agent_type,
+        "capabilities": req.capabilities,
+        "registered_at": time.time(),
+        "last_heartbeat": time.time(),
+        "status": "online"
+    }
+    ctx.cortex.add(
+        text=f"Agent '{req.agent_id}' ({req.agent_type}) registered for collaboration",
+        type="episodic",
+        metadata={"agent_id": req.agent_id, "action": "register"}
+    )
+    return {"status": "success", "message": f"Agent {req.agent_id} registered"}
+
+@app.post("/agents/heartbeat/{agent_id}")
+def agent_heartbeat(agent_id: str):
+    """Update agent heartbeat to show it's still active."""
+    if agent_id not in registered_agents:
+        raise HTTPException(404, "Agent not registered")
+    registered_agents[agent_id]["last_heartbeat"] = time.time()
+    registered_agents[agent_id]["status"] = "online"
+    return {"status": "ok", "timestamp": time.time()}
+
+@app.get("/agents/list")
+def list_agents():
+    """List all registered agents and their status."""
+    now = time.time()
+    agents = []
+    for agent_id, info in registered_agents.items():
+        # Mark as offline if no heartbeat in 60 seconds
+        if now - info["last_heartbeat"] > 60:
+            info["status"] = "offline"
+        agents.append(info)
+    return {"agents": agents}
+
+@app.get("/agents/{agent_id}/tasks")
+def get_agent_tasks(agent_id: str, include_completed: bool = False):
+    """Get all tasks assigned to a specific agent."""
+    cur = ctx.sql_conn.cursor()
+    if include_completed:
+        cur.execute("SELECT * FROM tasks WHERE assignee = ? ORDER BY created_at DESC", (agent_id,))
+    else:
+        cur.execute("SELECT * FROM tasks WHERE assignee = ? AND status IN ('pending', 'in_progress') ORDER BY priority, created_at", (agent_id,))
+    return {"agent_id": agent_id, "tasks": [dict(row) for row in cur.fetchall()]}
+
+@app.get("/agents/{agent_id}/next")
+def get_next_task(agent_id: str):
+    """Get the next pending task for an agent and auto-claim it."""
+    cur = ctx.sql_conn.cursor()
+    cur.execute(
+        "SELECT * FROM tasks WHERE assignee = ? AND status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT 1",
+        (agent_id,)
+    )
+    row = cur.fetchone()
+    if not row:
+        return {"task": None, "message": "No pending tasks"}
+    
+    task = dict(row)
+    # Auto-claim
+    now = time.time()
+    cur.execute(
+        "UPDATE tasks SET status = 'in_progress', claimed_by = ?, updated_at = ? WHERE id = ?",
+        (agent_id, now, task["id"])
+    )
+    ctx.sql_conn.commit()
+    ctx.cortex.add(
+        text=f"Agent '{agent_id}' auto-claimed task: {task['text'][:50]}...",
+        type="episodic",
+        metadata={"task_id": task["id"], "agent": agent_id, "action": "auto_claim"}
+    )
+    return {"task": task, "claimed": True}
+
+@app.post("/workflows/create")
+def create_workflow(req: WorkflowCreateRequest):
+    """Create a multi-agent workflow with task dependencies."""
+    workflow = {
+        "id": req.workflow_id,
+        "name": req.name,
+        "created_at": time.time(),
+        "status": "active",
+        "tasks": {}
+    }
+    
+    # Create all tasks
+    for task in req.tasks:
+        task_id = str(uuid.uuid4())
+        now = time.time()
+        cur = ctx.sql_conn.cursor()
+        metadata = {
+            "workflow_id": req.workflow_id,
+            "dependencies": task.dependencies,
+            "description": task.description
+        }
+        cur.execute(
+            """INSERT INTO tasks (id, text, assignee, claimed_by, status, priority, metadata, created_at, updated_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (task_id, task.name, task.assignee, None, "pending", task.priority, json.dumps(metadata), now, now)
+        )
+        workflow["tasks"][task.name] = task_id
+    
+    ctx.sql_conn.commit()
+    active_workflows[req.workflow_id] = workflow
+    
+    ctx.cortex.add(
+        text=f"Workflow '{req.name}' created with {len(req.tasks)} tasks",
+        type="episodic",
+        metadata={"workflow_id": req.workflow_id, "task_count": len(req.tasks)}
+    )
+    return {"status": "success", "workflow": workflow}
+
+@app.get("/workflows/{workflow_id}")
+def get_workflow(workflow_id: str):
+    """Get workflow status and all task statuses."""
+    if workflow_id not in active_workflows:
+        raise HTTPException(404, "Workflow not found")
+    
+    workflow = active_workflows[workflow_id]
+    cur = ctx.sql_conn.cursor()
+    
+    # Get current status of all tasks
+    task_statuses = {}
+    for task_name, task_id in workflow["tasks"].items():
+        cur.execute("SELECT status, claimed_by, updated_at FROM tasks WHERE id = ?", (task_id,))
+        row = cur.fetchone()
+        if row:
+            task_statuses[task_name] = dict(row)
+    
+    # Calculate overall progress
+    total = len(task_statuses)
+    completed = sum(1 for t in task_statuses.values() if t["status"] == "completed")
+    progress = completed / total if total > 0 else 0
+    
+    return {
+        "workflow": workflow,
+        "task_statuses": task_statuses,
+        "progress": progress,
+        "completed": completed,
+        "total": total
+    }
+
+@app.get("/workflows/list")
+def list_workflows():
+    """List all active workflows."""
+    return {"workflows": list(active_workflows.values())}
+
+# Delegate task to another agent
+@app.post("/tasks/delegate")
+def delegate_task(task_id: str, new_assignee: str, message: str = ""):
+    """Delegate a task from one agent to another."""
+    cur = ctx.sql_conn.cursor()
+    cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Task not found")
+    
+    old_assignee = row["assignee"]
+    now = time.time()
+    metadata = json.loads(row["metadata"])
+    metadata["delegated_from"] = old_assignee
+    metadata["delegation_message"] = message
+    metadata["delegated_at"] = now
+    
+    cur.execute(
+        """UPDATE tasks SET assignee = ?, status = 'pending', claimed_by = NULL, metadata = ?, updated_at = ? WHERE id = ?""",
+        (new_assignee, json.dumps(metadata), now, task_id)
+    )
+    ctx.sql_conn.commit()
+    
+    ctx.cortex.add(
+        text=f"Task delegated from '{old_assignee}' to '{new_assignee}': {row['text'][:30]}...",
+        type="episodic",
+        metadata={"task_id": task_id, "from": old_assignee, "to": new_assignee}
+    )
+    return {"status": "success", "delegated_to": new_assignee}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
+

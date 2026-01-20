@@ -1,0 +1,9 @@
+{
+  "name": "governor-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@langchain/langgraph": "latest",
+    "@langchain/core": "latest"
+  }
+}

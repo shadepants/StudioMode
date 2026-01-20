@@ -1,0 +1,25 @@
+{
+  "roots": [
+    "C:\\Users\\User\\Repositories",
+    "C:\\Users\\User\\docs",
+    "C:\\Users\\User\\.core",
+    "C:\\Users\\User\\.gemini"
+  ],
+  "policy": {
+    "mode": "Active",
+    "allow_read": true,
+    "allow_write": true,
+    "block_delete": true,
+    "block_system_config": true
+  },
+  "command_allowlist": [
+    "Get-Content", "Set-Content", "Add-Content", "Out-File",
+    "Get-ChildItem", "Test-Path", "Resolve-Path",
+    "New-Item", "Copy-Item", "Move-Item",
+    "git", "npm", "pnpm", "node", "python", "pip"
+  ],
+  "command_blocklist": [
+    "Remove-Item", "Stop-Process", "Restart-Computer",
+    "Set-ItemProperty", "New-ItemProperty", "reg", "net"
+  ]
+}

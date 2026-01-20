@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.log
+.gemini/
+.core_dupe/
+dist/
+coverage/
+.DS_Store
+Thumbs.db
+workspace/incoming/*
+!workspace/incoming/.gitkeep

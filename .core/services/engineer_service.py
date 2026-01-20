@@ -13,7 +13,10 @@ from pydantic import BaseModel
 import litellm
 import asyncio
 
-from .lib.governor import governed, ActionType, get_governor
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../lib")))
+
+from governor import governed, ActionType, get_governor
 
 # --- CONFIGURATION ---
 MEMORY_SERVER_URL = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")

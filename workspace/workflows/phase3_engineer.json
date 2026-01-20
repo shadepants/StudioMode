@@ -1,0 +1,26 @@
+{
+    "workflow_id": "phase3-core",
+    "name": "Phase 3: Engineer & Critic Agent Implementation",
+    "tasks": [
+        {
+            "name": "Implement Engineer Service",
+            "description": "Create the Engineer Agent service in `.core/services/engineer_service.py` using FastAPI. It should listen for 'EXECUTING' tasks, use LiteLLM to generate code, and handle file operations safely.",
+            "assignee": "antigravity",
+            "priority": "high"
+        },
+        {
+            "name": "Implement Critic Service",
+            "description": "Create the Critic Agent service in `.core/services/critic_service.py`. It should listen for 'REVIEW' tasks, run static analysis (linting, tests), and apply RepoReason metrics.",
+            "assignee": "gemini-cli",
+            "priority": "normal",
+            "dependencies": []
+        },
+        {
+            "name": "Review Integration Tests",
+            "description": "Create and run integration tests to verify the full loop: IDLE -> EXECUTING (Engineer) -> REVIEW (Critic) -> IDLE.",
+            "assignee": "gemini-cli",
+            "priority": "high",
+            "dependencies": []
+        }
+    ]
+}

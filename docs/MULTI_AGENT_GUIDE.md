@@ -20,10 +20,28 @@ This will:
 - Poll for tasks every 10 seconds
 - Print tasks when they arrive
 
-### 3. When You Receive a Task
-1. Read the task description
-2. Complete the work in the Gemini CLI
-3. Mark complete: `python .core/lib/agent_client.py complete <task-id>`
+### 3. [NEW] Fully Autonomous Mode
+To have an LLM automatically execute your tasks:
+
+```powershell
+# Set your API key (Groq for free tier, or OpenAI/Gemini)
+$env:GROQ_API_KEY = "your-key-here"
+
+# Start the autonomous executor
+python .core/lib/autonomous_agent.py --agent-id gemini-cli --model groq/llama-3.1-8b-instant
+```
+
+This will:
+- ✅ **Auto-execute** tasks assigned to you
+- ✅ **Save output** to `workspace/agent_output/`
+- ✅ **Mark complete** automatically
+
+### 4. Manual Mode (Legacy)
+If you prefer to perform tasks manually:
+1. Run `python .core/lib/agent_client.py poll --agent-id gemini-cli`
+2. Read the task description
+3. Complete the work
+4. Mark complete: `python .core/lib/agent_client.py complete <task-id>`
 
 ## Available Commands
 

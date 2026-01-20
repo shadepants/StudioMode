@@ -9,3 +9,8 @@ coverage/
 Thumbs.db
 workspace/incoming/*
 !workspace/incoming/.gitkeep
+__pycache__/
+*.pyc
+workspace/agent_output/
+.pytest_cache/
+.core/memory/lancedb/

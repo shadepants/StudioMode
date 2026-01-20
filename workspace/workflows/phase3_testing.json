@@ -1,0 +1,20 @@
+{
+  "workflow_id": "phase3-testing",
+  "name": "Phase 3: Unit Testing",
+  "tasks": [
+    {
+      "name": "Write Engineer Service Tests",
+      "description": "Create pytest unit tests for .core/services/engineer_service.py. Focus on the generate_code endpoint and Governor integration. Save the output as a Python file.",
+      "assignee": "gemini-cli",
+      "priority": "high",
+      "dependencies": []
+    },
+    {
+      "name": "Write Critic Service Tests",
+      "description": "Create pytest unit tests for .core/services/critic_service.py. Focus on the review_task endpoint and static analysis execution. Save the output as a Python file.",
+      "assignee": "gemini-cli",
+      "priority": "high",
+      "dependencies": []
+    }
+  ]
+}

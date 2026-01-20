@@ -108,7 +108,7 @@ class AutonomousAgent:
             self._notify("registered", "", "Agent Registration", f"Agent '{self.agent_id}' registered successfully")
             return True
         except Exception as e:
-            print(f"❌ Registration failed: {e}")
+            print(f"[ERR] Registration failed: {e}")
             return False
     
     async def heartbeat(self) -> bool:
@@ -167,15 +167,15 @@ class AutonomousAgent:
         )
         self.notifications.append(notification)
         
-        # Print to console with emoji
+        # Print to console with text indicators (Windows compatible)
         icons = {
-            "started": "🚀",
-            "completed": "✅",
-            "failed": "❌",
-            "timeout": "⏰",
-            "registered": "📝"
+            "started": "[>>]",
+            "completed": "[OK]",
+            "failed": "[ERR]",
+            "timeout": "[TIME]",
+            "registered": "[REG]"
         }
-        icon = icons.get(event, "📌")
+        icon = icons.get(event, "[*]")
         print(f"\n{icon} [{event.upper()}] {message}")
         if details:
             for k, v in details.items():
@@ -352,7 +352,7 @@ Complete this task to the best of your ability. Provide a complete, actionable r
         self.running = True
         tasks_processed = 0
         
-        print(f"\n🤖 Autonomous Agent '{self.agent_id}' Starting...")
+        print(f"\n[AGENT] Autonomous Agent '{self.agent_id}' Starting...")
         print(f"   Model: {self.model}")
         print(f"   Timeout: {self.timeout}s")
         print(f"   Poll Interval: {poll_interval}s")
@@ -372,23 +372,23 @@ Complete this task to the best of your ability. Provide a complete, actionable r
                     tasks_processed += 1
                     
                     if max_tasks > 0 and tasks_processed >= max_tasks:
-                        print(f"\n📊 Processed {tasks_processed} tasks. Stopping.")
+                        print(f"\n[DONE] Processed {tasks_processed} tasks. Stopping.")
                         break
                 else:
                     # No task available
-                    print(f"⏳ Polling... ({datetime.now().strftime('%H:%M:%S')})", end="\r")
+                    print(f"[...] Polling... ({datetime.now().strftime('%H:%M:%S')})", end="\r")
                 
                 await asyncio.sleep(poll_interval)
                 
             except KeyboardInterrupt:
-                print("\n\n👋 Stopping autonomous agent...")
+                print("\n\n[BYE] Stopping autonomous agent...")
                 break
             except Exception as e:
-                print(f"\n❌ Loop error: {e}")
+                print(f"\n[ERR] Loop error: {e}")
                 await asyncio.sleep(poll_interval)
         
         self.running = False
-        print(f"\n📊 Session Summary: Processed {tasks_processed} tasks")
+        print(f"\n[SUMMARY] Session Summary: Processed {tasks_processed} tasks")
     
     async def close(self):
         """Cleanup resources."""

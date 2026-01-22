@@ -4,6 +4,6 @@
   "type": "module",
   "dependencies": {
     "@langchain/langgraph": "latest",
-    "@langchain/core": "latest"
+    "@langchain/core": ">=0.3.80"
   }
 }

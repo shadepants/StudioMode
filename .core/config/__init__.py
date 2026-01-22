@@ -1,0 +1,66 @@
+"""
+Studio Mode - Configuration Package
+"""
+from .settings import (
+    # Server URLs
+    MEMORY_SERVER_URL,
+    ENGINEER_SERVICE_URL,
+    CRITIC_SERVICE_URL,
+    SCOUT_SERVICE_URL,
+    # LLM
+    DEFAULT_MODEL,
+    DEFAULT_TIMEOUT,
+    # Directories
+    WORKSPACE_DIR,
+    OUTPUT_DIR,
+    INCOMING_DIR,
+    PROCESSED_DIR,
+    DOCS_DIR,
+    # API Keys
+    TAVILY_API_KEY,
+    SERP_API_KEY,
+    GROQ_API_KEY,
+    # Governor
+    MAX_LLM_CALLS_PER_MINUTE,
+    MAX_FILE_OPS_PER_MINUTE,
+    ESCALATION_THRESHOLD,
+    # Timing
+    DEFAULT_POLL_INTERVAL,
+    HEARTBEAT_TIMEOUT,
+    # Vector Store
+    EMBEDDING_MODEL_NAME,
+    SYNC_INTERVAL,
+    BUFFER_SIZE,
+    DECAY_RATE,
+    # Databases
+    DB_URI,
+    SQLITE_DB,
+)
+
+__all__ = [
+    "MEMORY_SERVER_URL",
+    "ENGINEER_SERVICE_URL",
+    "CRITIC_SERVICE_URL",
+    "SCOUT_SERVICE_URL",
+    "DEFAULT_MODEL",
+    "DEFAULT_TIMEOUT",
+    "WORKSPACE_DIR",
+    "OUTPUT_DIR",
+    "INCOMING_DIR",
+    "PROCESSED_DIR",
+    "DOCS_DIR",
+    "TAVILY_API_KEY",
+    "SERP_API_KEY",
+    "GROQ_API_KEY",
+    "MAX_LLM_CALLS_PER_MINUTE",
+    "MAX_FILE_OPS_PER_MINUTE",
+    "ESCALATION_THRESHOLD",
+    "DEFAULT_POLL_INTERVAL",
+    "HEARTBEAT_TIMEOUT",
+    "EMBEDDING_MODEL_NAME",
+    "SYNC_INTERVAL",
+    "BUFFER_SIZE",
+    "DECAY_RATE",
+    "DB_URI",
+    "SQLITE_DB",
+]

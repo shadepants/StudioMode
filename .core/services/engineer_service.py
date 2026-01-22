@@ -7,23 +7,39 @@ Implements the 'Refinist' approach: Functional Core first, then hardening.
 
 import os
 import json
-import httpx
+import asyncio
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import litellm
-import asyncio
 
 import sys
+# Ensure we can import libraries similarly to original file
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../lib")))
 
 from governor import governed, ActionType, get_governor
 
-# --- CONFIGURATION ---
-MEMORY_SERVER_URL = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")
-DEFAULT_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-WORKSPACE_DIR = os.path.abspath("./workspace")
+try:
+    from ..config import DEFAULT_MODEL
+    from .base_service import BaseAgentService
+except ImportError:
+    from .core.config import DEFAULT_MODEL
+    from .core.services.base_service import BaseAgentService
 
-# --- PERSONA DEFINITION ---
+# --- MODELS ---
+class CodeGenerationRequest(BaseModel):
+    task_id: str
+    task_text: str
+    context: str = ""
+    file_path: Optional[str] = None
+    existing_content: Optional[str] = None
+
+class CodeGenerationResponse(BaseModel):
+    task_id: str
+    code: str
+    explanation: str
+    file_path: Optional[str] = None
+
+# --- PERSONA ---
 ENGINEER_SYSTEM_PROMPT = """You are the C.O.R.E. Engineer, a specialized code generation agent.
 Your primary objective is implementation, debugging, and optimization.
 Follow the "Refinist" approach: Functional Core (v0.1) first, then hardening.
@@ -39,49 +55,75 @@ Return ONLY the code block(s) requested. If explanation is needed, use comments 
 Do not wrap in markdown code blocks unless requested.
 """
 
-class CodeGenerationRequest(BaseModel):
-    task_id: str
-    task_text: str
-    context: str = ""
-    file_path: Optional[str] = None  # If modifying existing file
-    existing_content: Optional[str] = None # Content of file if modifying
-
-class CodeGenerationResponse(BaseModel):
-    task_id: str
-    code: str
-    explanation: str
-    file_path: Optional[str] = None
-
-class ImplementationRequest(BaseModel):
-    task_id: str
-    agent_id: str
-
-class EngineerService:
+class EngineerService(BaseAgentService):
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=60.0)
+        super().__init__(agent_id="engineer-1", agent_type="engineer", capabilities=["code-generation", "refactoring", "polishing"])
         self.governor = get_governor()
 
-    async def _update_task_status(self, task_id: str, status: str, metadata: Dict[str, Any] = {}):
-        """Helper to update task status in Memory Server."""
+    async def process_task(self, task: Dict[str, Any]):
+        """
+        Process tasks assigned to the engineer.
+        Task Types:
+        - "implementation": standard code gen
+        - "polishing": refinement
+        """
+        print(f"[Engineer] Processing task: {task['id']}")
+        await self.update_task(task['id'], "in_progress")
+
         try:
-            await self.client.post(
-                f"{MEMORY_SERVER_URL}/tasks/update",
-                json={
-                    "task_id": task_id,
-                    "status": status,
-                    "metadata": metadata
-                }
+            # Parse metadata logic
+            metadata = task.get("metadata", {})
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+
+            task_text = task["text"]
+            file_path = metadata.get("target_file")
+            
+            # Read context if file exists
+            existing_content = None
+            if file_path:
+                 # Using self.client (AsyncMemoryClient) to read file
+                 try:
+                     resp = await self.client.read_file(file_path)
+                     existing_content = resp.get("content")
+                 except Exception:
+                     pass # File might not exist yet
+
+            # Prepare Request
+            gen_req = CodeGenerationRequest(
+                task_id=task["id"],
+                task_text=task_text,
+                context=metadata.get("description", ""),
+                file_path=file_path,
+                existing_content=existing_content
             )
+
+            # Generate
+            gen_resp = await self.generate_code(gen_req)
+
+            # Write to FS
+            if gen_resp.file_path:
+                print(f"[Engineer] Writing code to {gen_resp.file_path}...")
+                success = await self.client.write_file(gen_resp.file_path, gen_resp.code)
+                if not success:
+                    raise Exception("FileSystem Write Failed")
+
+            # Update to Review
+            await self.update_task(task['id'], "review", {
+                "output_path": gen_resp.file_path,
+                "engineer_explanation": gen_resp.explanation
+            })
+            
         except Exception as e:
-            print(f"[Engineer] Failed to update task: {e}")
+            print(f"[Engineer] Task failed: {e}")
+            await self.update_task(task['id'], "failed", {"error": str(e)})
 
     @governed(ActionType.LLM_CALL, lambda args: args[1].task_text if len(args) > 1 else "Unknown Task")
     async def generate_code(self, req: CodeGenerationRequest) -> CodeGenerationResponse:
-        """
-        Generate code based on the request.
-        """
-        
-        # Construct the prompt
+        """Core generation logic with Governor."""
         user_prompt = f"Task: {req.task_text}\n\n"
         
         if req.context:
@@ -96,109 +138,28 @@ class EngineerService:
         if req.file_path:
             user_prompt += f"Target File: {req.file_path}\n"
 
-        # Call LLM
-        try:
-            response = await litellm.acompletion(
-                model=DEFAULT_MODEL,
-                messages=[
-                    {"role": "system", "content": ENGINEER_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Basic parsing if LLM wraps in markdown
-            code = self._extract_code(content)
-            
-            return CodeGenerationResponse(
-                task_id=req.task_id,
-                code=code,
-                explanation="Generated by C.O.R.E. Engineer",
-                file_path=req.file_path
-            )
-
-        except Exception as e:
-            print(f"[Engineer] Generation failed: {e}")
-            raise e
-
-    async def implement_task(self, req: ImplementationRequest) -> Dict[str, Any]:
-        """
-        High-level implementation workflow:
-        1. Fetch task details from Memory Server
-        2. Generate code
-        3. Write to file system (via Memory Server FS API)
-        4. Move to review
-        """
-        print(f"[Engineer] Implementing task: {req.task_id}")
-        
-        # 1. Fetch Task
-        resp = await self.client.get(f"{MEMORY_SERVER_URL}/tasks/list")
-        tasks = resp.json().get("tasks", [])
-        task = next((t for t in tasks if t["id"] == req.task_id), None)
-        
-        if not task:
-            raise ValueError(f"Task {req.task_id} not found")
-            
-        task_text = task["text"]
-        metadata = json.loads(task.get("metadata", "{}"))
-        file_path = metadata.get("target_file")
-        
-        # 2. Prepare Context (Read existing file if applicable)
-        existing_content = None
-        if file_path:
-            try:
-                fs_resp = await self.client.get(f"{MEMORY_SERVER_URL}/fs/read", params={"path": file_path})
-                if fs_resp.status_code == 200:
-                    existing_content = fs_resp.json().get("content")
-            except:
-                pass
-
-        # 3. Generate Code
-        gen_req = CodeGenerationRequest(
-            task_id=req.task_id,
-            task_text=task_text,
-            context=metadata.get("description", ""),
-            file_path=file_path,
-            existing_content=existing_content
+        response = await litellm.acompletion(
+            model=DEFAULT_MODEL,
+            messages=[
+                {"role": "system", "content": ENGINEER_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ]
         )
         
-        gen_resp = await self.generate_code(gen_req)
+        content = response.choices[0].message.content
+        code = self._extract_code(content)
         
-        # 4. Write to File System
-        if gen_resp.file_path:
-            print(f"[Engineer] Writing code to {gen_resp.file_path}...")
-            write_resp = await self.client.post(
-                f"{MEMORY_SERVER_URL}/fs/write",
-                json={
-                    "path": gen_resp.file_path,
-                    "content": gen_resp.code
-                }
-            )
-            if write_resp.status_code != 200:
-                error_detail = write_resp.text
-                await self._update_task_status(req.task_id, "failed", {"error": f"FS Write failed: {error_detail}"})
-                return {"status": "failed", "error": "FS Write failed"}
-
-        # 5. Update Task to Review
-        await self._update_task_status(req.task_id, "review", {
-            "output_path": gen_resp.file_path,
-            "engineer_explanation": gen_resp.explanation
-        })
-        
-        return {
-            "status": "success",
-            "task_id": req.task_id,
-            "file_path": gen_resp.file_path
-        }
+        return CodeGenerationResponse(
+            task_id=req.task_id,
+            code=code,
+            explanation="Generated by C.O.R.E. Engineer",
+            file_path=req.file_path
+        )
 
     def _extract_code(self, content: str) -> str:
-        """Extract code from markdown code blocks if present."""
         if "```" in content:
-            # simple extraction of first block
             try:
                 start = content.find("```")
-                # skip language identifier line
                 end_first_line = content.find("\n", start)
                 end = content.find("```", end_first_line)
                 if end != -1:
@@ -207,37 +168,6 @@ class EngineerService:
                 pass
         return content
 
-# --- FASTAPI APP ---
-from fastapi import FastAPI, HTTPException
-
-app = FastAPI(title="Engineer Service", version="1.0.0")
-service = EngineerService()
-
-@app.post("/engineer/generate")
-async def generate_endpoint(req: CodeGenerationRequest):
-    try:
-        return await service.generate_code(req)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/engineer/implement")
-async def implement_endpoint(req: ImplementationRequest):
-    try:
-        return await service.implement_task(req)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-def health():
-    return {"status": "online", "persona": "C.O.R.E. Engineer"}
-
-# --- CLI FOR TESTING ---
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    service = EngineerService()
+    asyncio.run(service.start())

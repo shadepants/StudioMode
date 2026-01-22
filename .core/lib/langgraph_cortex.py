@@ -19,17 +19,22 @@ from langgraph.graph.message import add_messages
 import litellm
 
 # --- CONFIGURATION ---
-MEMORY_SERVER_URL = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")
-DEFAULT_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
+# --- CONFIGURATION ---
+try:
+    from ..config import MEMORY_SERVER_URL, DEFAULT_MODEL
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from .core.config import MEMORY_SERVER_URL, DEFAULT_MODEL
 
 
 # --- STATE DEFINITION ---
-class AgentState(str, Enum):
-    """Mirrors the state enum in memory_server.py"""
-    IDLE = "IDLE"
-    PLANNING = "PLANNING"
-    EXECUTING = "EXECUTING"
-    REVIEW = "REVIEW"
+# --- STATE DEFINITION ---
+try:
+    from ..models import AgentState
+except ImportError:
+    from .core.models import AgentState
 
 
 class HiveState(TypedDict):

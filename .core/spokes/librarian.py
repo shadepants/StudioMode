@@ -7,9 +7,19 @@ import requests
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-INCOMING_DIR = os.path.abspath("./workspace/incoming")
-PROCESSED_DIR = os.path.abspath("./workspace/processed")
-API_URL = "http://localhost:8000/sources/add"
+
+try:
+    from ..config import MEMORY_SERVER_URL, INCOMING_DIR, PROCESSED_DIR
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from .core.config import MEMORY_SERVER_URL, INCOMING_DIR, PROCESSED_DIR
+
+# Ensure directories exist
+os.makedirs(INCOMING_DIR, exist_ok=True)
+os.makedirs(PROCESSED_DIR, exist_ok=True)
+
+API_URL = f"{MEMORY_SERVER_URL}/sources/add"
 
 class LibrarianHandler(FileSystemEventHandler):
     def on_created(self, event):

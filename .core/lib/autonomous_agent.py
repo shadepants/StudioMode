@@ -32,19 +32,23 @@ except ImportError:
     print("[!] litellm not installed. Install with: pip install litellm")
 
 # --- CONFIGURATION ---
-MEMORY_SERVER_URL = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")
-DEFAULT_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-DEFAULT_TIMEOUT = int(os.getenv("AGENT_TIMEOUT", "120"))  # seconds
-OUTPUT_DIR = "./workspace/agent_output"
+
+# --- CONFIGURATION ---
+try:
+    from ..config import MEMORY_SERVER_URL, DEFAULT_MODEL, DEFAULT_TIMEOUT, OUTPUT_DIR
+    from ..lib.memory_client import AsyncMemoryClient
+except ImportError:
+    # Fallback for standalone execution
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from .core.config import MEMORY_SERVER_URL, DEFAULT_MODEL, DEFAULT_TIMEOUT, OUTPUT_DIR
+    from .core.lib.memory_client import AsyncMemoryClient
 
 
-class TaskStatus(str, Enum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    TIMEOUT = "timeout"
-    REVIEW = "review"
+try:
+    from ..models import TaskStatus
+except ImportError:
+    from .core.models import TaskStatus
 
 
 @dataclass
@@ -87,7 +91,7 @@ class AutonomousAgent:
         self.model = model
         self.timeout = timeout
         self.server_url = server_url
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = AsyncMemoryClient(base_url=server_url, timeout=30.0)
         self.notifications: List[Notification] = []
         self.running = False
         
@@ -95,65 +99,32 @@ class AutonomousAgent:
     
     async def register(self) -> bool:
         """Register agent with Memory Server."""
-        try:
-            resp = await self.client.post(
-                f"{self.server_url}/agents/register",
-                json={
-                    "agent_id": self.agent_id,
-                    "agent_type": "autonomous",
-                    "capabilities": ["code", "research", "analysis", "autonomous"]
-                }
-            )
-            resp.raise_for_status()
+        success = await self.client.register(
+            self.agent_id, 
+            "autonomous", 
+            ["code", "research", "analysis", "autonomous"]
+        )
+        if success:
             self._notify("registered", "", "Agent Registration", f"Agent '{self.agent_id}' registered successfully")
             return True
-        except Exception as e:
-            print(f"[ERR] Registration failed: {e}")
-            return False
+        print(f"[ERR] Registration failed")
+        return False
     
     async def heartbeat(self) -> bool:
         """Send heartbeat to server."""
-        try:
-            resp = await self.client.post(f"{self.server_url}/agents/heartbeat/{self.agent_id}")
-            return resp.status_code == 200
-        except:
-            return False
+        return await self.client.heartbeat(self.agent_id)
     
     async def get_next_task(self) -> Optional[Dict[str, Any]]:
         """Poll for next available task."""
-        try:
-            resp = await self.client.get(f"{self.server_url}/agents/{self.agent_id}/next")
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("task")
-        except Exception as e:
-            return None
+        return await self.client.get_next_task(self.agent_id)
     
     async def update_task(self, task_id: str, status: str, metadata: Dict = None) -> bool:
         """Update task status."""
-        try:
-            resp = await self.client.post(
-                f"{self.server_url}/tasks/update",
-                json={
-                    "task_id": task_id,
-                    "status": status,
-                    "metadata": metadata or {}
-                }
-            )
-            return resp.status_code == 200
-        except:
-            return False
+        return await self.client.update_task(task_id, status, metadata)
     
     async def add_memory(self, text: str, mem_type: str = "episodic", metadata: Dict = None) -> bool:
         """Add entry to Memory Server."""
-        try:
-            resp = await self.client.post(
-                f"{self.server_url}/memory/add",
-                json={"text": text, "type": mem_type, "metadata": metadata or {}}
-            )
-            return resp.status_code == 200
-        except:
-            return False
+        return await self.client.add_memory(text, mem_type, metadata)
     
     def _notify(self, event: str, task_id: str, task_name: str, message: str, details: Dict = None):
         """Create and store a notification."""

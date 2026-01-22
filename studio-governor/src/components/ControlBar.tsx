@@ -7,6 +7,7 @@ import {
   Terminal,
   Settings,
 } from "lucide-react";
+import { api } from "../lib/api";
 
 interface ControlBarProps {
   onRefresh?: () => void;
@@ -29,11 +30,7 @@ export function ControlBar({ onRefresh }: ControlBarProps) {
   const handleStart = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/state/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_state: "EXECUTING" }),
-      });
+      const res = await api.updateState("EXECUTING");
       if (res.ok) {
         showStatus("Hive started!", "success");
       } else {
@@ -49,11 +46,7 @@ export function ControlBar({ onRefresh }: ControlBarProps) {
   const handleStop = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/state/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_state: "IDLE" }),
-      });
+      const res = await api.updateState("IDLE");
       if (res.ok) {
         showStatus("Hive stopped", "success");
       } else {
@@ -71,14 +64,10 @@ export function ControlBar({ onRefresh }: ControlBarProps) {
 
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/tasks/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: taskText,
-          assignee: "gemini-cli",
-          priority: "normal",
-        }),
+      const res = await api.createTask({
+        text: taskText,
+        assignee: "gemini-cli",
+        priority: "normal",
       });
       if (res.ok) {
         showStatus("Task created!", "success");

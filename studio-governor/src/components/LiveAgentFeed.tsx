@@ -7,6 +7,7 @@ import {
   Clock,
   MessageSquare,
 } from "lucide-react";
+import { api } from "../lib/api";
 
 interface FeedEvent {
   id: string;
@@ -46,26 +47,20 @@ export function LiveAgentFeed() {
   // Fast polling for real-time feel (1 second)
   const fetchFeed = useCallback(async () => {
     try {
-      const [feedRes, tasksRes] = await Promise.all([
-        fetch("http://localhost:8000/memory/feed?limit=30"),
-        fetch("http://localhost:8000/tasks/list?limit=10"),
+      const [feedData, tasksData] = await Promise.all([
+        api.getFeed(30),
+        api.getTasks({}), // Fetch all for summary, or limit if API supported it
       ]);
 
-      if (feedRes.ok) {
-        const data = await feedRes.json();
-        setEvents((prev) => {
-          // Only update if there's new data
-          if (JSON.stringify(prev) !== JSON.stringify(data)) {
-            return data;
-          }
-          return prev;
-        });
-      }
+      setEvents((prev) => {
+        // Only update if there's new data
+        if (JSON.stringify(prev) !== JSON.stringify(feedData)) {
+          return feedData;
+        }
+        return prev;
+      });
 
-      if (tasksRes.ok) {
-        const data = await tasksRes.json();
-        setTasks(data.tasks || []);
-      }
+      setTasks(tasksData.tasks || []);
 
       setIsConnected(true);
       setLastUpdate(new Date());

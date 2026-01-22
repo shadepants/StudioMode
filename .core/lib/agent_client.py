@@ -19,9 +19,16 @@ from typing import Optional, Dict, Any
 import httpx
 
 # --- CONFIGURATION ---
-DEFAULT_SERVER = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")
+
+# --- CONFIGURATION ---
+try:
+    from ..config import MEMORY_SERVER_URL as DEFAULT_SERVER, DEFAULT_POLL_INTERVAL
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from .core.config import MEMORY_SERVER_URL as DEFAULT_SERVER, DEFAULT_POLL_INTERVAL
 DEFAULT_AGENT_ID = "gemini-cli"
-DEFAULT_POLL_INTERVAL = 10  # seconds
+
 
 
 class AgentClient:

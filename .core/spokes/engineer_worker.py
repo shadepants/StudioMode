@@ -13,8 +13,15 @@ import json
 from datetime import datetime
 
 # --- CONFIGURATION ---
-MEMORY_SERVER_URL = os.getenv("MEMORY_SERVER_URL", "http://127.0.0.1:8000")
-ENGINEER_SERVICE_URL = os.getenv("ENGINEER_SERVICE_URL", "http://127.0.0.1:8001")
+
+# --- CONFIGURATION ---
+try:
+    from ..config import MEMORY_SERVER_URL, ENGINEER_SERVICE_URL
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from .core.config import MEMORY_SERVER_URL, ENGINEER_SERVICE_URL
+
 POLL_INTERVAL = 5  # Seconds
 AGENT_ID = "engineer"
 

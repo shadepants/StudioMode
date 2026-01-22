@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Database, Cpu, Search, Eye, RefreshCw } from "lucide-react";
+import { api } from "../lib/api";
 
 interface ServiceStatus {
   name: string;
@@ -100,37 +101,22 @@ export function ServiceStatusBar() {
       services.map(async (service) => {
         try {
           const checkStart = Date.now();
-          const res = await fetch(`http://localhost:${service.port}/state`, {
-            method: "GET",
-            signal: AbortSignal.timeout(2000),
-          });
+          const stateData = await api.checkServiceHealth(service.port);
           const responseTime = Date.now() - checkStart;
 
-          if (res.ok) {
-            const data = await res.json();
-            const state = data.current_state?.toLowerCase() || "online";
-            return {
-              ...service,
-              status:
-                state === "executing"
-                  ? ("executing" as const)
-                  : state === "idle"
-                  ? ("idle" as const)
-                  : ("online" as const),
-              responseTime,
-            };
-          }
-          return { ...service, status: "offline" as const };
+          const state = stateData.current_state?.toLowerCase() || "online";
+
+          return {
+            ...service,
+            status:
+              state === "executing"
+                ? ("executing" as const)
+                : state === "idle"
+                ? ("idle" as const)
+                : ("online" as const),
+            responseTime,
+          };
         } catch {
-          // Try health endpoint as fallback
-          try {
-            const res = await fetch(`http://localhost:${service.port}/health`, {
-              signal: AbortSignal.timeout(1000),
-            });
-            if (res.ok) {
-              return { ...service, status: "online" as const };
-            }
-          } catch {}
           return { ...service, status: "offline" as const };
         }
       })

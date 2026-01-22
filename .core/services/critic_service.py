@@ -1,32 +1,41 @@
 import os
 import subprocess
 import shutil
-from pathlib import Path
 from typing import Dict, Any, List
+try:
+    from .base_service import BaseAgentService
+except ImportError:
+    from .core.services.base_service import BaseAgentService
 
-class CriticService:
+class CriticService(BaseAgentService):
     """
     Critic Service: runs static analysis and calculates RepoReason metrics.
     Listens for 'REVIEW' tasks.
     """
     
     def __init__(self, work_dir: str = "./workspace"):
+        super().__init__(agent_id="critic-1", agent_type="critic", capabilities=["code-review", "linting", "testing"])
         self.work_dir = os.path.abspath(work_dir)
         
-    def review_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process a review task.
-        Expected task structure:
-        {
-            "id": "task-uuid",
-            "metadata": {
-                "repo_path": "path/relative/to/workspace" (optional),
-                "target_file": "path/to/file.py" (optional)
-            }
-        }
-        """
+    async def process_task(self, task: Dict[str, Any]):
+        """Process assigned review task."""
         print(f"[Critic] Reviewing task: {task.get('id')}")
         
+        # 1. Update status to IN_PROGRESS
+        await self.update_task(task['id'], "in_progress")
+        
+        # 2. Perform Review
+        try:
+            results = self._perform_review(task)
+            status = "completed" if results["status"] == "pass" else "failed" # or 'needs_revision'
+            
+            # 3. Update Status
+            await self.update_task(task['id'], status, {"review_results": results})
+        except Exception as e:
+            await self.update_task(task['id'], "failed", {"error": str(e)})
+
+    def _perform_review(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal synchronous review logic."""
         # Determine target path
         metadata = task.get("metadata", {})
         if isinstance(metadata, str):
@@ -46,7 +55,9 @@ class CriticService:
         }
         
         if not os.path.exists(full_path):
-            return {"error": f"Path not found: {full_path}"}
+            results["errors"].append(f"Path not found: {full_path}")
+            results["status"] = "failed"
+            return results
             
         # 1. Run Linter (Flake8)
         print(f"[Critic] Running linter on {full_path}...")
@@ -76,11 +87,11 @@ class CriticService:
                 results["status"] = "tests_failed"
         except FileNotFoundError:
              print("[Critic] Pytest not found. Skipping tests.")
-
+             
         return results
 
 # Expose a standalone entry point if needed
 if __name__ == "__main__":
+    import asyncio
     service = CriticService()
-    # Mock task for local testing
-    print(service.review_task({"id": "test", "metadata": {"repo_path": "."}}))
+    asyncio.run(service.start())

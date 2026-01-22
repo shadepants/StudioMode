@@ -13,9 +13,12 @@ Usage:
 
 import argparse
 import sys
+import os
 import httpx
 
-MEMORY_SERVER_URL = "http://localhost:8000"
+# Add parent to path for imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from .core.config import MEMORY_SERVER_URL
 
 
 def start(args):

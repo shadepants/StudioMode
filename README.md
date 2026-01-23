@@ -1,9 +1,19 @@
-# Studio Mode - Multi-Agent Development Factory
+# README.md - Studio Mode
 
 **The Governed HiVE** - An autonomous multi-agent system for software development.
 
 ## 🚀 Quick Start
 
+### One-Command Launch (Recommended)
+```powershell
+# Activate virtual environment and launch entire system
+.\.venv\Scripts\Activate.ps1
+./start_hive.ps1
+```
+
+This starts: Memory Server, Engineer Agent, Critic Agent, Scout Agent, and Orchestrator.
+
+### Manual Launch (Development)
 ```powershell
 # 1. Activate virtual environment
 .\.venv\Scripts\Activate.ps1
@@ -49,23 +59,22 @@ graph TB
 ```
 StudioMode/
 ├── .core/
-│   ├── agents/          # Agent persona definitions
-│   ├── cli/             # Command-line tools
-│   │   └── hive_cli.py  # Hive management CLI
+│   ├── config/          # Centralized configuration
+│   ├── models/          # Shared data models (AgentState, TaskStatus)
 │   ├── lib/             # Core libraries
-│   │   ├── langgraph_cortex.py
 │   │   ├── autonomous_agent.py
 │   │   ├── governor.py
-│   │   └── health_check.py
+│   │   └── memory_client.py
 │   └── services/        # Agent services
-│       ├── memory_server.py
+│       ├── memory_server.py   # Central API (~200 lines)
+│       ├── base_service.py    # Agent base class
 │       ├── engineer_service.py
 │       ├── critic_service.py
 │       └── scout_service.py
+├── studio-governor/     # React frontend dashboard
 ├── tests/               # Test suite
-├── workspace/           # Working directory
-│   └── agent_output/    # Generated outputs
-└── docs/                # Documentation
+├── docs/                # Documentation (see docs/INDEX.md)
+└── start_hive.ps1       # One-command system launcher
 ```
 
 ## 🔧 CLI Usage
@@ -95,6 +104,7 @@ pytest tests/ -v
 
 | Endpoint        | Method | Description              |
 | --------------- | ------ | ------------------------ |
+| `/`             | GET    | Health check & status    |
 | `/state`        | GET    | Get current system state |
 | `/tasks/create` | POST   | Create a new task        |
 | `/tasks/list`   | GET    | List all tasks           |
@@ -108,6 +118,10 @@ pytest tests/ -v
 $env:GROQ_API_KEY = "your-groq-api-key"
 $env:LITELLM_LOG = "DEBUG"  # Optional
 ```
+
+## 📚 Documentation
+
+See [docs/INDEX.md](docs/INDEX.md) for a guided reading order.
 
 ## 📄 License
 

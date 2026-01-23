@@ -19,7 +19,36 @@ except ImportError:
          from .core.lib.memory_client import AsyncMemoryClient
 
 class BaseAgentService(ABC):
+    """
+    Abstract base class for autonomous agent services in Studio Mode.
+    
+    Provides standardized lifecycle management for agents including:
+    - Automatic registration with Memory Server
+    - Background heartbeat to maintain online status
+    - Task polling loop to fetch and process assigned work
+    
+    Subclasses must implement the `process_task()` method.
+    
+    Example:
+        class MyAgent(BaseAgentService):
+            async def process_task(self, task: dict):
+                # Handle the task
+                await self.update_task(task['id'], 'DONE')
+        
+        agent = MyAgent("my-agent", "worker", ["code", "review"])
+        asyncio.run(agent.start())
+    """
+    
     def __init__(self, agent_id: str, agent_type: str, capabilities: List[str] = [], memory_url: str = None):
+        """
+        Initialize the agent service.
+        
+        Args:
+            agent_id: Unique identifier for this agent instance (e.g., "engineer-1")
+            agent_type: Category of agent (e.g., "engineer", "critic", "scout")
+            capabilities: List of task types this agent can handle (e.g., ["code", "review"])
+            memory_url: Optional custom Memory Server URL. Defaults to http://127.0.0.1:8000
+        """
         self.agent_id = agent_id
         self.agent_type = agent_type
         self.capabilities = capabilities

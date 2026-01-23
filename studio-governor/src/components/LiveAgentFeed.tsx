@@ -14,7 +14,11 @@ interface FeedEvent {
   text: string;
   type: string;
   timestamp: number;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    new_state?: string;
+    agent_id?: string;
+    [key: string]: string | undefined;
+  };
 }
 
 interface TaskEvent {

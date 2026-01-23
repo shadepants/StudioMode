@@ -95,8 +95,6 @@ export function ServiceStatusBar() {
   const [lastCheck, setLastCheck] = useState<Date>(new Date());
 
   const checkServices = useCallback(async () => {
-    const startTime = Date.now();
-
     const updatedServices = await Promise.all(
       services.map(async (service) => {
         try {

@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { WebContainer } from "@webcontainer/api";
-import { Terminal } from "xterm";
+import { useEffect, useState, useCallback } from "react";
 import { TerminalView } from "./components/Terminal";
 import { FileExplorer } from "./components/FileExplorer";
 import { FileViewer } from "./components/FileViewer";
@@ -8,8 +6,8 @@ import { SourcesList } from "./components/SourcesList";
 import { TaskBoard } from "./components/TaskBoard";
 import { AgentFeed } from "./components/AgentFeed";
 
-import { CommandQueue } from "./lib/Throttler";
 import { api } from "./lib/api";
+import { useWebContainer } from "./lib/useWebContainer";
 import {
   LayoutDashboard,
   Terminal as TerminalIcon,
@@ -21,40 +19,31 @@ import {
   Database,
   Search,
 } from "lucide-react";
-
-// @ts-ignore
-import agentSource from "./files/agent.js?raw";
-// @ts-ignore
-import packageJsonSource from "./files/package.json?raw";
 import "./index.css";
 
 function App() {
-  const [status, setStatus] = useState<
-    "booting" | "installing" | "ready" | "error"
-  >("booting");
-  const [queueSize, setQueueSize] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedFile, setSelectedFile] = useState<{
     path: string;
     content: string;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<"explorer" | "research">(
-    "explorer"
-  );
-
-  const terminalRef = useRef<Terminal | null>(null);
-  const containerRef = useRef<WebContainer | null>(null);
-  const processRef = useRef<any>(null);
-  const queueRef = useRef<CommandQueue | null>(null);
-
+  const [activeTab, setActiveTab] = useState<
+    "explorer" | "research" | "metrics" | "governance"
+  >("explorer");
   const [memDaemonStatus, setMemDaemonStatus] = useState<"ONLINE" | "OFFLINE">(
     "OFFLINE"
   );
 
+  // Use the extracted WebContainer hook
+  const { status, queueSize, handleInput, terminalRef } = useWebContainer({
+    onRefresh: () => setRefreshTrigger((prev) => prev + 1),
+  });
+
+  // Memory daemon status polling
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await api.getState();
+        await api.getState();
         setMemDaemonStatus("ONLINE");
       } catch {
         setMemDaemonStatus("OFFLINE");
@@ -65,153 +54,13 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const addLog = (msg: string, type: "info" | "warn" | "success" = "info") => {
-    console.log(`[${type}] ${msg}`);
-    if (terminalRef.current) {
-      const color =
-        type === "warn"
-          ? "\x1b[31m"
-          : type === "success"
-          ? "\x1b[32m"
-          : "\x1b[90m";
-      // Only write important logs to terminal to avoid clutter
-      if (type !== "info" || msg.includes("Booting") || msg.includes("Ready")) {
-        terminalRef.current.write(`\r\n${color}[SYS] ${msg}\x1b[0m\r\n`);
-      }
-    }
-  };
-
-  const handleInput = (data: string) => {
-    queueRef.current?.enqueue(data);
-  };
-
-  const handleFileSelect = async (path: string) => {
+  const handleFileSelect = useCallback(async (path: string) => {
     try {
-      addLog(`Reading ${path}...`, "info");
       const data = await api.readFile(path);
       setSelectedFile(data);
     } catch (err) {
-      addLog(`Error reading file: ${err}`, "warn");
+      console.error(`Error reading file: ${err}`);
     }
-  };
-
-  useEffect(() => {
-    queueRef.current = new CommandQueue(
-      async (command: string) => {
-        const process = processRef.current;
-        if (!process) return;
-        const writer = process.input.getWriter();
-        await writer.write(command);
-        writer.releaseLock();
-      },
-      (size) => setQueueSize(size),
-      50
-    );
-
-    let isMounted = true;
-
-    async function boot() {
-      if (containerRef.current) return;
-
-      // Allow terminal to mount
-      await new Promise((r) => setTimeout(r, 100));
-
-      try {
-        const term = terminalRef.current;
-        if (!term || !isMounted) return;
-
-        // --- PRE-FLIGHT CHECKS ---
-        addLog("Starting Pre-flight Diagnostics...", "info");
-        const isIsolated = window.crossOriginIsolated;
-
-        if (!isIsolated) {
-          throw new Error(
-            "Security Headers Missing. Site must be Cross-Origin Isolated."
-          );
-        }
-
-        addLog("Booting WebContainer...", "info");
-        const webcontainer = await WebContainer.boot();
-        containerRef.current = webcontainer;
-
-        addLog("Mounting file system...", "info");
-        await webcontainer.mount({
-          "agent.js": { file: { contents: agentSource } },
-          "package.json": { file: { contents: packageJsonSource } },
-        });
-
-        setStatus("installing");
-        addLog("Running npm install...", "info");
-
-        const installProcess = await webcontainer.spawn("npm", ["install"]);
-        installProcess.output.pipeTo(
-          new WritableStream({
-            write(data) {
-              term.write(`\x1b[2m${data}\x1b[0m`);
-            },
-          })
-        );
-
-        const exitCode = await installProcess.exit;
-        if (exitCode !== 0)
-          throw new Error(`npm install failed with code ${exitCode}`);
-
-        addLog("Agent Environment Ready.", "success");
-        const process = await webcontainer.spawn("node", ["agent.js"]);
-        processRef.current = process;
-
-        process.output.pipeTo(
-          new WritableStream({
-            write(data) {
-              term.write(data);
-
-              // --- SYNC INTERCEPTOR ---
-              if (data.includes("<<SYS_FILE_SYNC>>")) {
-                const payload = data.split("<<SYS_FILE_SYNC>>")[1].trim();
-                try {
-                  const fileData = JSON.parse(payload);
-                  addLog(`Syncing ${fileData.path} to host...`, "info");
-
-                  fetch("http://localhost:8000/fs/write", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(fileData),
-                  })
-                    .then((res) => {
-                      if (res.ok) {
-                        addLog(`Saved: ${fileData.path}`, "success");
-                        setRefreshTrigger((prev) => prev + 1);
-                      } else addLog(`Save Failed: ${res.statusText}`, "warn");
-                    })
-                    .catch((err) => addLog(`Network Error: ${err}`, "warn"));
-                } catch (e) {
-                  addLog("Sync Protocol Error", "warn");
-                }
-              }
-              // ------------------------
-
-              if (data.includes("[AGENT]"))
-                addLog(data.replace(/\x1b\[[0-9;]*m/g, ""), "info");
-            },
-          })
-        );
-
-        setStatus("ready");
-      } catch (err) {
-        if (!isMounted) return;
-        addLog(`FATAL: ${err}`, "warn");
-        setStatus("error");
-        terminalRef.current?.write(
-          `\r\n\x1b[31mFATAL ERROR:\r\n${err}\x1b[0m\r\n`
-        );
-      }
-    }
-
-    boot();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   return (

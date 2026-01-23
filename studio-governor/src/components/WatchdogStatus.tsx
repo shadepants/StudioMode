@@ -1,11 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import {
-  Shield,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  RefreshCw,
-} from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
 
 interface HealthStatus {
   status: "healthy" | "degraded" | "critical";

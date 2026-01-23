@@ -1,40 +1,30 @@
 # Studio Mode Documentation Index
 
-Welcome! This guide provides a suggested reading order for understanding the Studio Mode multi-agent system.
+Welcome to the central hub for Studio Mode. This documentation is organized by purpose and audience to help you navigate the system efficiently.
 
 ## 🚀 Getting Started
+*   **[Quick Start Guide](getting-started/QUICK_START.md)** - Launch the system in minutes.
+*   **[Multi-Agent Guide](MULTI_AGENT_GUIDE.md)** - Learn how agents collaborate.
+*   **[System Overview](architecture/OVERVIEW.md)** - High-level conceptual map.
 
-1. **[README.md](../README.md)** - Quick start and project overview
-2. **[SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md)** - Full system architecture
-3. **[MULTI_AGENT_GUIDE.md](MULTI_AGENT_GUIDE.md)** - How agents work together
+## 🏗️ Architecture & Philosophy
+*   **[Governed HiVE Spec](architecture/GOVERNED_HIVE_SPEC_v2.1.md)** - The core logic specification.
+*   **[Agent Personas](architecture/AGENT_PERSONAS.md)** - Roles and responsibilities of the hive.
+*   **[Studio Manifesto](STUDIO_MANIFESTO.md)** - Design philosophy and core principles.
 
-## 🏗️ Architecture
+## 🔧 Developer Reference
+*   **[API Reference](reference/API.md)** - Memory server endpoints and schemas.
+*   **[CLI Reference](reference/CLI.md)** - Command-line tools and usage.
+*   **[Environment Config](reference/ENVIRONMENT.md)** - Setup and configuration variables.
 
-4. **[architecture/](architecture/)** - Detailed design documents
-5. **[STUDIO_MANIFESTO.md](STUDIO_MANIFESTO.md)** - Design philosophy and principles
+## 📖 Guides & Resources
+*   **[Contributing Guide](guides/CONTRIBUTING.md)** - How to add agents and features.
+*   **[Library](library/)** - Reference materials and patterns.
+*   **[Research](research/)** - Exploration notes and logs.
 
-## 📚 Deep Dives
+## 📁 Historical Data
+*   **[Project History](PROJECT_HISTORY.md)** - Development chronology.
+*   **[Archive](archive/)** - Legacy and deprecated documentation.
 
-6. **[system_context/](system_context/)** - Context and constraints
-7. **[research/](research/)** - Background research and exploration
-8. **[library/](library/)** - Reference materials and patterns
-
-## 📁 Directory Guide
-
-| Directory         | Contents               |
-| ----------------- | ---------------------- |
-| `architecture/`   | System design docs     |
-| `archive/`        | Legacy/deprecated docs |
-| `library/`        | Reference materials    |
-| `research/`       | Exploration notes      |
-| `system_context/` | Project context        |
-
-## 🔧 Key Files for Developers
-
-| What You Want      | Where to Look                    |
-| ------------------ | -------------------------------- |
-| Start the system   | `./start_hive.ps1`               |
-| Add a new agent    | `.core/services/base_service.py` |
-| Configure settings | `.core/config/settings.py`       |
-| Understand state   | `.core/models/state.py`          |
-| Run tests          | `pytest tests/ -v`               |
+---
+*Last Updated: January 23, 2026*

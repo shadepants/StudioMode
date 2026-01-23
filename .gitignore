@@ -14,3 +14,11 @@ __pycache__/
 workspace/agent_output/
 .pytest_cache/
 .core/memory/lancedb/
+
+# Logs
+logs/
+mem_log.txt
+server.log
+server_err.log
+vite.log
+vite_err.log

@@ -6,8 +6,27 @@ Supports Agent Registration, Task Management, and Memory Operations.
 """
 
 import httpx
+import os
+import sys
 from typing import Optional, Dict, Any, List
-from ..config import MEMORY_SERVER_URL
+
+# Add project root to sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from .core.config import MEMORY_SERVER_URL
+except (ImportError, ValueError):
+    try:
+        from config import MEMORY_SERVER_URL
+    except ImportError:
+        try:
+            from ..config import MEMORY_SERVER_URL
+        except (ImportError, ValueError):
+            # Fallback to default if everything fails
+            MEMORY_SERVER_URL = "http://127.0.0.1:8000"
 
 class AsyncMemoryClient:
     """Async HTTP client for the Memory Server."""

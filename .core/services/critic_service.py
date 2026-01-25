@@ -1,11 +1,28 @@
 import os
+import sys
 import subprocess
 import shutil
 from typing import Dict, Any, List
+
+# Add the project root, .core, and current directory to sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+core_dir = os.path.abspath(os.path.join(current_dir, ".."))
+project_root = os.path.abspath(os.path.join(core_dir, ".."))
+
+for d in [project_root, core_dir, current_dir]:
+    if d not in sys.path:
+        sys.path.insert(0, d)
+
 try:
-    from .base_service import BaseAgentService
+    from base_service import BaseAgentService
 except ImportError:
-    from .core.services.base_service import BaseAgentService
+    try:
+        from services.base_service import BaseAgentService
+    except ImportError:
+        try:
+            from .base_service import BaseAgentService
+        except (ImportError, ValueError):
+            from .core.services.base_service import BaseAgentService
 
 class CriticService(BaseAgentService):
     """

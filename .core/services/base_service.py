@@ -6,17 +6,26 @@ import sys
 from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
 
-# Add .core directory to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project root, .core, and current directory to sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+core_dir = os.path.abspath(os.path.join(current_dir, ".."))
+project_root = os.path.abspath(os.path.join(core_dir, ".."))
+
+for d in [project_root, core_dir, current_dir]:
+    if d not in sys.path:
+        sys.path.insert(0, d)
 
 try:
     from lib.memory_client import AsyncMemoryClient
 except ImportError:
     try:
-        from ..lib.memory_client import AsyncMemoryClient
-    except ImportError:
-         # Fallback if run from different context
-         from .core.lib.memory_client import AsyncMemoryClient
+        from .core.lib.memory_client import AsyncMemoryClient
+    except (ImportError, ValueError):
+        try:
+            from ..lib.memory_client import AsyncMemoryClient
+        except (ImportError, ValueError):
+            # Fallback if run from different context
+            from .core.lib.memory_client import AsyncMemoryClient
 
 class BaseAgentService(ABC):
     """

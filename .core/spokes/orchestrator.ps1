@@ -35,22 +35,36 @@ while($true) {
         }
         elseif ($CurrentState -eq "REVIEW") {
             # If items need review, stay here (Critic is working).
-            # If no items are in 'review' status, we are done.
+            # If no items are in 'review' status, move to REFLECT.
             $TasksInReview = @($Tasks.tasks | Where-Object { $_.status -eq "review" })
             
             Write-Host "[DEBUG] In Review: $($TasksInReview.Count) | All: $($Tasks.tasks.Count)"
 
             if ($TasksInReview.Count -eq 0) {
-                 # Make sure we don't jump back to IDLE if 'pending' tasks appeared during review (Rejected tasks)
-                 if ($Pending.Count -gt 0) {
-                     Write-Host "[STATE] Tasks Rejected/Added. Returning to PLANNING." -ForegroundColor Cyan
-                     # Note: REVIEW -> PLANNING is valid.
-                     Invoke-RestMethod -Uri "$API_BASE/state/update" -Method Post -Body (@{new_state="PLANNING"} | ConvertTo-Json) -ContentType "application/json"
-                 }
-                 else {
-                     Write-Host "[STATE] Review Complete. System IDLE." -ForegroundColor Green
-                     Invoke-RestMethod -Uri "$API_BASE/state/update" -Method Post -Body (@{new_state="IDLE"} | ConvertTo-Json) -ContentType "application/json"
-                 }
+                Write-Host "[STATE] Review Complete. Transitioning to REFLECT." -ForegroundColor Magenta
+                Invoke-RestMethod -Uri "$API_BASE/state/update" -Method Post -Body (@{new_state="REFLECT"} | ConvertTo-Json) -ContentType "application/json"
+            }
+        }
+        elseif ($CurrentState -eq "REFLECT") {
+            # Reflection phase: Capture learnings from review outcomes
+            Write-Host "[STATE] Reflection phase. Analyzing outcomes..." -ForegroundColor Magenta
+            
+            $FailedTasks = @($Tasks.tasks | Where-Object { $_.status -eq "failed" })
+            
+            # Log lessons for failed tasks (future enhancement: call /reflect/log_lesson)
+            if ($FailedTasks.Count -gt 0) {
+                Write-Host "[REFLECT] $($FailedTasks.Count) failure(s) detected. Logging lessons." -ForegroundColor Yellow
+                # Future: Extract patterns and call API
+            }
+            
+            # Transition based on pending work
+            if ($Pending.Count -gt 0) {
+                Write-Host "[STATE] Tasks pending. Returning to PLANNING with lessons." -ForegroundColor Cyan
+                Invoke-RestMethod -Uri "$API_BASE/state/update" -Method Post -Body (@{new_state="PLANNING"} | ConvertTo-Json) -ContentType "application/json"
+            }
+            else {
+                Write-Host "[STATE] All tasks complete. System IDLE." -ForegroundColor Green
+                Invoke-RestMethod -Uri "$API_BASE/state/update" -Method Post -Body (@{new_state="IDLE"} | ConvertTo-Json) -ContentType "application/json"
             }
         }
         elseif ($CurrentState -eq "PLANNING") {

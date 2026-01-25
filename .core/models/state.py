@@ -13,10 +13,12 @@ class AgentState(str, Enum):
     PLANNING = "PLANNING"
     EXECUTING = "EXECUTING"
     REVIEW = "REVIEW"
+    REFLECT = "REFLECT"
 
 VALID_TRANSITIONS: Dict[AgentState, List[AgentState]] = {
     AgentState.IDLE: [AgentState.PLANNING, AgentState.EXECUTING],
     AgentState.PLANNING: [AgentState.EXECUTING, AgentState.IDLE],
     AgentState.EXECUTING: [AgentState.REVIEW, AgentState.PLANNING], 
-    AgentState.REVIEW: [AgentState.IDLE, AgentState.PLANNING]
+    AgentState.REVIEW: [AgentState.REFLECT],  # Always go to REFLECT after REVIEW
+    AgentState.REFLECT: [AgentState.IDLE, AgentState.PLANNING]  # Learn then decide
 }

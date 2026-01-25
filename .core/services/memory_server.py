@@ -103,6 +103,12 @@ class AgentRegistration(BaseModel):
     agent_type: str
     capabilities: List[str] = []
 
+class ReflectRequest(BaseModel):
+    task_id: str
+    failure_reason: str
+    pattern: str
+    solution: Optional[str] = None
+
 # --- ENDPOINTS: STATE ---
 
 @app.get("/state")
@@ -152,6 +158,54 @@ def query_memory(req: QueryRequest):
 @app.get("/memory/feed")
 def get_memory_feed(limit: int = 20):
     return services.cortex.get_feed(limit)
+
+# --- ENDPOINTS: REFLECT ---
+
+@app.post("/reflect/log_lesson")
+def log_lesson(req: ReflectRequest):
+    """Log a failed pattern to LESSONS.md for future learning."""
+    lessons_path = os.path.join(".core/memory", "LESSONS.md")
+    
+    # Ensure file exists
+    if not os.path.exists(lessons_path):
+        os.makedirs(os.path.dirname(lessons_path), exist_ok=True)
+        with open(lessons_path, "w") as f:
+            f.write("# Lessons Learned\n\n---\n\n")
+    
+    lesson_entry = f"""## Pattern: Task {req.task_id} Failure
+- **Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}
+- **Task ID**: {req.task_id}
+- **Issue**: {req.failure_reason}
+- **Pattern to Avoid**:
+```
+{req.pattern}
+```
+{f'- **Solution**: {req.solution}' if req.solution else ''}
+
+---
+"""
+    
+    # Append to LESSONS.md
+    with open(lessons_path, "a") as f:
+        f.write(lesson_entry)
+    
+    # Also log to episodic memory
+    services.cortex.add(
+        f"Lesson learned from task {req.task_id}: {req.failure_reason}", 
+        "episodic", 
+        {"task_id": req.task_id, "action": "reflect", "reason": req.failure_reason}
+    )
+    
+    return {"status": "success", "lesson_logged": True}
+
+@app.get("/reflect/lessons")
+def get_lessons():
+    """Retrieve all lessons learned."""
+    lessons_path = os.path.join(".core/memory", "LESSONS.md")
+    if os.path.exists(lessons_path):
+        with open(lessons_path, "r") as f:
+            return {"content": f.read()}
+    return {"content": "# Lessons Learned\n\nNo lessons recorded yet."}
 
 # --- ENDPOINTS: FILES ---
 
